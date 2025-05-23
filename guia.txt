@@ -1,0 +1,7 @@
+QUE NECESITAM0OS crear una aplicación web QUE TENGA 
+    *permita a los usuarios registrarse
+    *iniciar sesión 
+    *gestionar una lista de tareas personales
+
+    Que debe de hacer:
+     usuarios podrán agregar nuevas tareas,marcarlas como completadas, y eliminarlas
