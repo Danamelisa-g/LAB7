@@ -1,12 +1,13 @@
-import {
+import { getAuth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
   User,
+  signOut,
+  onAuthStateChanged
 } from "firebase/auth";
 import { auth, db } from "./FirebaseConfig";
 import { doc, setDoc, getDoc } from "firebase/firestore";
+import { Userid } from "../../utils/Type";
 
 // Tipos para las respuestas
 interface AuthResponse {
