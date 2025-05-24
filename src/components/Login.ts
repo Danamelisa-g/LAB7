@@ -11,41 +11,46 @@ class LoginForm extends HTMLElement {
         this.render();
         this.setupListeners();
     }
-
+ // Método que configura todos los event listeners del formulario
     setupListeners() {
         const form = this.shadowRoot?.querySelector("form");
+         // Agregamos listener para el evento submit del formulario
         form?.addEventListener("submit", async (e) => {
-            e.preventDefault();
+            e.preventDefault();// Prevenimos el comportamiento por defecto del form
 
+          // Obtenemos referencias a los elementos del formulario
             const emailInput = this.shadowRoot?.querySelector("#email") as HTMLInputElement;
             const passwordInput = this.shadowRoot?.querySelector("#password") as HTMLInputElement;
             const errorMsg = this.shadowRoot?.querySelector(".error-message");
-
+            // Validamos que los inputs y el mensaje de error existan
             if (emailInput && passwordInput && errorMsg) {
+                 // Obtenemos los valores y removemos espacios en blanco
                 const email = emailInput.value.trim();
                 const password = passwordInput.value.trim();
 
-                if (!email || !password) {
-                    errorMsg.textContent = "Por favor, completa todos los campos";
-                    return;
+                if (!email || !password) {// Validación básica: verificamos que ambos campos estén llenos
+                    errorMsg.textContent = "completa todos los campos";
+                    return;//indica qie debemos salir de la función si hay error
                 }
+                //obtenermos un boton 
 
                 const submitBtn = this.shadowRoot?.querySelector("button[type='submit']") as HTMLButtonElement;
                 if (submitBtn) {
                     submitBtn.disabled = true;
-                    submitBtn.textContent = "Iniciando sesión...";
+                    submitBtn.textContent = "Iniciando sesión...";//se le cambia el texto 
                 }
-
+                //asignamos la funcion de login 
                 const result = await loginUser(email, password);
-
+                 // Verificamos si el login fue exitoso
                 if (result.success) {
-                    window.history.pushState({}, "", "/tasks");
+                    window.history.pushState({}, "", "/tasks");//se cambian url 
                     const event = new CustomEvent("route-change", {
                         bubbles: true,
                         composed: true,
                         detail: { path: "/tasks" },
                     });
                     this.dispatchEvent(event);
+                    //emite un evento
                 } else {
                     errorMsg.textContent = result.error || "Error al iniciar sesión";
                     if (submitBtn) {

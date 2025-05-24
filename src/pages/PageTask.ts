@@ -1,9 +1,9 @@
 import { Userid } from "../utils/Type";
-import { getTasksByUserId, addTask,updateTask,deleteTask,} from "../services/Firebase/Userservice";
+import { getTasksByUserId, addTask, updateTask, deleteTask } from "../services/Firebase/Userservice";
 import { logoutUser, getCurrentUserId, getCurrentUserEmail } from "../services/Firebase/Auth";
 
-class pageTask extends HTMLElement {
-  private tasks:Userid[] = [];
+class PageTask extends HTMLElement {
+  private tasks: Userid[] = [];
 
   constructor() {
     super();
@@ -35,6 +35,15 @@ class pageTask extends HTMLElement {
         this.dispatchEvent(event);
       }
     });
+
+    // Escuchar eventos de las tarjetas de tareas
+    this.addEventListener("task-status-changed", ((e: CustomEvent) => {
+      this.handleTaskStatusChange(e.detail.id, e.detail.status);
+    }) as EventListener);
+
+    this.addEventListener("task-deleted", ((e: CustomEvent) => {
+      this.handleTaskDelete(e.detail.id);
+    }) as EventListener);
   }
 
   openAddTaskModal() {
@@ -47,7 +56,6 @@ class pageTask extends HTMLElement {
       </div>
     `;
 
-    // Estilos simples del modal
     modal.style.cssText = `
       position: fixed;
       top: 0;
@@ -108,13 +116,20 @@ class pageTask extends HTMLElement {
     if (!userId) return;
 
     const newTask = {
-      userId,
+      userid: userId, // Corregido: era userId, debe ser userid según tu tipo
       title: taskData.title,
       description: taskData.description,
       status: "todo" as const,
     };
 
-    
+    // Llamar a la función addTask de Firebase
+    const taskId = await addTask(newTask);
+    if (taskId) {
+      this.showMessage("Tarea añadida ✨");
+      this.loadTasks(); // Recargar las tareas
+    } else {
+      this.showMessage("Error al añadir tarea ❌");
+    }
   }
 
   async loadTasks() {
@@ -139,23 +154,30 @@ class pageTask extends HTMLElement {
       return;
     }
 
-    // Separar tareas
-    const pendingTasks = this.tasks.filter(task => task.status !== "completed");
+    // Separar tareas por estado
+    const todoTasks = this.tasks.filter(task => task.status === "todo");
+    const inProgressTasks = this.tasks.filter(task => task.status === "in-progress");
     const completedTasks = this.tasks.filter(task => task.status === "completed");
 
     container.innerHTML = `
       <div class="tasks-section">
-        <h3>📝 Tareas Pendientes (${pendingTasks.length})</h3>
-        <div class="task-list" id="pending-tasks"></div>
+        <h3>📝 Por Hacer (${todoTasks.length})</h3>
+        <div class="task-list" id="todo-tasks"></div>
       </div>
       
       <div class="tasks-section">
-        <h3>✅ Tareas Completadas (${completedTasks.length})</h3>
+        <h3>⏳ En Progreso (${inProgressTasks.length})</h3>
+        <div class="task-list" id="progress-tasks"></div>
+      </div>
+      
+      <div class="tasks-section">
+        <h3>✅ Completadas (${completedTasks.length})</h3>
         <div class="task-list" id="completed-tasks"></div>
       </div>
     `;
 
-    this.renderTaskList(pendingTasks, "#pending-tasks");
+    this.renderTaskList(todoTasks, "#todo-tasks");
+    this.renderTaskList(inProgressTasks, "#progress-tasks");
     this.renderTaskList(completedTasks, "#completed-tasks");
   }
 
@@ -170,40 +192,37 @@ class pageTask extends HTMLElement {
 
     container.innerHTML = "";
     tasks.forEach(task => {
-      const taskElement = document.createElement("div");
-      taskElement.className = `task-item ${task.status === "completed" ? "completed" : ""}`;
-      taskElement.innerHTML = `
-        <div class="task-content">
-          <h4>${task.title}</h4>
-          <p>${task.description}</p>
-        </div>
-        <div class="task-actions">
-          <button class="complete-btn" onclick="this.closest('tasks-page').toggleTask('${task.id}', ${task.status !== "completed"})">
-            ${task.status === "completed" ? "❌" : "✅"}
-          </button>
-          <button class="delete-btn" onclick="this.closest('tasks-page').deleteTask('${task.id}')">
-            🗑️
-          </button>
-        </div>
-      `;
-      container.appendChild(taskElement);
+      // Crear el elemento task-card usando el Web Component
+      const taskCard = document.createElement("task-card");
+      taskCard.setAttribute("id", task.id);
+      taskCard.setAttribute("title", task.title);
+      taskCard.setAttribute("description", task.description);
+      taskCard.setAttribute("status", task.status);
+      
+      container.appendChild(taskCard);
     });
   }
 
-  async toggleTask(taskId: string, completed: boolean) {
-    const success = await updateTask(taskId, { status: completed ? "completed" : "todo" });
+  async handleTaskStatusChange(taskId: string, newStatus: string) {
+    const success = await updateTask(taskId, { status: newStatus });
     if (success) {
-      this.loadTasks();
-      this.showMessage(completed ? "Tarea completada ✅" : "Tarea pendiente 📝");
+      this.loadTasks(); // Recargar las tareas
+      const statusText = newStatus === "todo" ? "Por hacer 📝" : 
+                        newStatus === "in-progress" ? "En progreso ⏳" : "Completada ✅";
+      this.showMessage(`Tarea actualizada: ${statusText}`);
+    } else {
+      this.showMessage("Error al actualizar tarea ❌");
     }
   }
 
-  async deleteTask(taskId: string) {
+  async handleTaskDelete(taskId: string) {
     if (confirm("¿Eliminar esta tarea?")) {
       const success = await deleteTask(taskId);
       if (success) {
-        this.loadTasks();
+        this.loadTasks(); // Recargar las tareas
         this.showMessage("Tarea eliminada 🗑️");
+      } else {
+        this.showMessage("Error al eliminar tarea ❌");
       }
     }
   }
@@ -220,6 +239,7 @@ class pageTask extends HTMLElement {
       padding: 12px 20px;
       border-radius: 10px;
       z-index: 1000;
+      box-shadow: 0 4px 12px rgba(233, 30, 99, 0.3);
     `;
     document.body.appendChild(message);
     setTimeout(() => message.remove(), 3000);
@@ -249,7 +269,7 @@ class pageTask extends HTMLElement {
         }
         
         .header {
-          max-width: 800px;
+          max-width: 1200px;
           margin: 0 auto 30px;
           background: var(--card-bg);
           padding: 20px;
@@ -294,7 +314,7 @@ class pageTask extends HTMLElement {
           padding: 12px 24px;
           margin: 0 auto 20px;
           display: block;
-          max-width: 800px;
+          max-width: 1200px;
         }
         
         #add-task-btn:hover {
@@ -309,12 +329,13 @@ class pageTask extends HTMLElement {
         }
         
         .main-content {
-          max-width: 800px;
+          max-width: 1200px;
           margin: 0 auto;
         }
         
         .tasks-container {
           display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
           gap: 20px;
         }
         
@@ -332,67 +353,16 @@ class pageTask extends HTMLElement {
         }
         
         .task-list {
-          display: grid;
-          gap: 10px;
-        }
-        
-        .task-item {
-          background: #FAFAFA;
-          padding: 15px;
-          border-radius: 10px;
-          border: 1px solid var(--border-color);
           display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-        
-        .task-item.completed {
-          opacity: 0.7;
-        }
-        
-        .task-item.completed h4 {
-          text-decoration: line-through;
-        }
-        
-        .task-content h4 {
-          margin: 0 0 5px 0;
-          color: var(--text-color);
-          font-size: 16px;
-        }
-        
-        .task-content p {
-          margin: 0;
-          color: #666;
-          font-size: 14px;
-        }
-        
-        .task-actions {
-          display: flex;
-          gap: 5px;
-        }
-        
-        .complete-btn, .delete-btn {
-          background: none;
-          border: 1px solid var(--border-color);
-          padding: 5px 8px;
-          border-radius: 5px;
-          font-size: 14px;
-        }
-        
-        .complete-btn:hover {
-          background: var(--primary-color);
-          color: white;
-        }
-        
-        .delete-btn:hover {
-          background: var(--accent-color);
-          color: white;
+          flex-direction: column;
+          gap: 15px;
         }
         
         .empty-state {
           text-align: center;
           padding: 40px;
           color: var(--text-color);
+          grid-column: 1 / -1;
         }
         
         .no-tasks {
@@ -414,15 +384,8 @@ class pageTask extends HTMLElement {
             gap: 10px;
           }
           
-          .task-item {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 10px;
-          }
-          
-          .task-actions {
-            align-self: stretch;
-            justify-content: flex-end;
+          .tasks-container {
+            grid-template-columns: 1fr;
           }
         }
       </style>
@@ -457,4 +420,4 @@ class pageTask extends HTMLElement {
   }
 }
 
-export default pageTask;
+export default PageTask;
